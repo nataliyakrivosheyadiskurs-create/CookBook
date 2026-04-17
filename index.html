@@ -576,9 +576,15 @@ async function loadFromSheets(){
     cols.forEach((col,j)=>{const cell=row.c?.[j];r[col.toLowerCase().replace(/\s+/g,'_')]=cell?.v??'';});
     // Support both Russian and English column names + actual spreadsheet columns
     const title = r['заголовок']||r['название']||r['name']||r['title']||Object.values(r)[0]||'';
-    const ingredients = r['ингредиенты']||r['ingredients']||r['ingredient']||'';
-    const instructions = r['рецепт']||r['приготовление']||r['instructions']||'';
-    const categories = r['категория']||r['категории']||r['categories']||'';
+    // Try to find ingredients by key name (handles encoding differences)
+    const allKeys = Object.keys(r);
+    const ingKey = allKeys.find(k => k.includes('нгредиент') || k === 'ingredients' || k === 'ingredient');
+    const recipeKey = allKeys.find(k => k.includes('рецепт') || k === 'instructions' || k === 'recipe');
+    const catKey = allKeys.find(k => k.includes('атегори') || k === 'categories' || k === 'category');
+    const ingredients = (ingKey ? r[ingKey] : '') || '';
+    const instructionsRaw = (recipeKey ? r[recipeKey] : '') || '';
+    const instructions = instructionsRaw;
+    const categories = (catKey ? r[catKey] : '') || r['категория'] || r['категории'] || '';
     const totalTime = r['итого_время']||r['общее_время']||r['время']||'';
     const cookingTime = r['время_готовки']||r['время_приготовления']||'';
     const prepTime = r['время_подготовки']||'';
@@ -647,7 +653,7 @@ function renderHome(){
      <div class="stat"><span class="stat-num">${cats.length}</span><span class="stat-label">категорий</span></div>
      <div class="stat"><span class="stat-num">${recipes.filter(r=>r.favorite).length}</span><span class="stat-label">избранных</span></div>`;
   document.getElementById('quickCats').innerHTML=cats.slice(0,9).map(([cat,cnt])=>
-    `<div class="cat-card" onclick="filterByCat('${esc(cat)}');showPage('cookbook')">
+    `<div class="cat-card" onclick="setFilter('${esc(cat)}');showPage('cookbook')">
       <span class="cat-icon">${CAT_ICONS[cat]||'🍳'}</span>
       <div class="cat-name">${cat}</div><div class="cat-count">${cnt} рец.</div>
     </div>`).join('');
@@ -712,7 +718,7 @@ function renderDetail(id){
       <button class="add-to-cart-btn" onclick="addRecipeToShop('${esc(r.id)}')">🛒 Добавить в список покупок</button>
     </div>
     <div class="detail-body">
-      ${cats.length?`<div class="detail-section"><div class="detail-section-title">📂 Категории</div><div class="detail-section-body"><div class="detail-cats">${cats.map(c=>`<span class="detail-cat-tag" onclick="filterByCat('${esc(c)}');showPage('cookbook')">${CAT_ICONS[c]||''} ${c}</span>`).join('')}</div></div></div>`:''}
+      ${cats.length?`<div class="detail-section"><div class="detail-section-title">📂 Категории</div><div class="detail-section-body"><div class="detail-cats">${cats.map(c=>`<span class="detail-cat-tag" onclick="setFilter('${esc(c)}');showPage('cookbook')">${CAT_ICONS[c]||''} ${c}</span>`).join('')}</div></div></div>`:''}
       ${ings.length?`<div class="detail-section"><div class="detail-section-title">🌿 Ингредиенты</div><div class="detail-section-body">${ings.map(i=>`<div class="ing-item">${i.trim()}</div>`).join('')}</div></div>`:''}
       ${steps.length?`<div class="detail-section"><div class="detail-section-title">📋 Приготовление</div><div class="detail-section-body">${steps.map((s,i)=>`<div class="step-item"><div class="step-num">${i+1}</div><div>${s}</div></div>`).join('')}</div></div>`:''}
       ${r.notes?`<div class="detail-section"><div class="detail-section-title">💬 Заметки</div><div class="detail-section-body"><div class="notes-text">${r.notes}</div></div></div>`:''}
