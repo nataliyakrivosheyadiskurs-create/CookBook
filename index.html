@@ -443,7 +443,22 @@ body{
 
 <script>
 // ══════════════════════════════════════════════════════
-//  🔥 FIREBASE CONFIG — вставь свой конфиг сюда
+//  🔥 FIREBASE CONFIG
+//  Rules in Realtime Database → Rules:
+//  {
+//    "rules": {
+//      "recipes": {
+//        ".read": "auth != null",
+//        ".write": "auth != null"
+//      },
+//      "users": {
+//        "$uid": {
+//          ".read": "$uid === auth.uid",
+//          ".write": "$uid === auth.uid"
+//        }
+//      }
+//    }
+//  }
 // ══════════════════════════════════════════════════════
 const FIREBASE_CONFIG = {
   apiKey:            "AIzaSyDVqy0VRpY3SFbe6418xVAfaUnAX-xQGdY",
@@ -534,7 +549,8 @@ async function startApp(){
     if(sr&&sr.length>0) recipes=sr;
   }catch(e){}
 
-  userRef.child('recipes').on('value',snap=>{
+  // Shared recipes (all users can see & add)
+  db.ref('recipes').on('value',snap=>{
     const fb=[];
     snap.forEach(c=>{const r=c.val();r.id=c.key;r.fromFirebase=true;fb.push(r);});
     recipes=[...fb,...recipes.filter(r=>r.fromSheets)];
@@ -565,8 +581,28 @@ async function loadFromSheets(){
   return rows.map((row,i)=>{
     const r={};
     cols.forEach((col,j)=>{const cell=row.c?.[j];r[col.toLowerCase().replace(/\s+/g,'_')]=cell?.v??'';});
-    const title=r['название']||r['name']||r['title']||Object.values(r)[0]||'';
-    return{id:'s'+i,title,description:r['описание']||r['description']||'',ingredients:r['ингредиенты']||r['ingredients']||'',instructions:r['приготовление']||r['instructions']||'',categories:r['категории']||r['categories']||'',totalTime:r['общее_время']||r['время']||'',cookingTime:r['время_готовки']||'',servings:r['порции']||r['servings']||'',difficulty:r['сложность']||r['difficulty']||'',rating:r['рейтинг']||r['rating']||'',notes:r['заметки']||r['notes']||'',source:r['источник']||r['source']||'',favorite:(r['избранное']||r['favorite']||'').toString().toLowerCase()==='true',fromSheets:true};
+    // Support both Russian and English column names + actual spreadsheet columns
+    const title = r['заголовок']||r['название']||r['name']||r['title']||Object.values(r)[0]||'';
+    const ingredients = r['ингредиенты']||r['ingredients']||'';
+    const instructions = r['рецепт']||r['приготовление']||r['instructions']||'';
+    const categories = r['категория']||r['категории']||r['categories']||'';
+    const totalTime = r['итого_время']||r['общее_время']||r['время']||'';
+    const cookingTime = r['время_готовки']||r['время_приготовления']||'';
+    const prepTime = r['время_подготовки']||'';
+    const notes = r['комментарий']||r['заметки']||r['notes']||'';
+    const source = r['ссылка']||r['источник']||r['source']||r['видео']||'';
+    const rating = r['рейтинг']||r['rating']||'';
+    const fav = r['favorite']||r['избранное']||'';
+    return{id:'s'+i,title,description:r['description']||r['описание']||'',
+      ingredients,instructions,categories,
+      totalTime: totalTime||cookingTime,
+      cookingTime, prepTime,
+      servings:r['quantity']||r['порции']||r['servings']||'',
+      difficulty:r['сложность']||r['difficulty']||'',
+      rating, notes, source,
+      nutrition:r['nutrition']||'',
+      favorite:fav.toString().toLowerCase()==='true',
+      fromSheets:true};
   }).filter(r=>r.title);
 }
 async function refreshFromSheets(){
@@ -577,7 +613,7 @@ async function refreshFromSheets(){
     if(sr&&sr.length>0){
       recipes=[...recipes.filter(r=>r.fromFirebase),...sr];
       renderHome();renderCookbook();
-      st.textContent=`✓ Загружено ${sr.length}`;showToast(`✅ Загружено ${sr.length} рецептов`,'green');
+      st.textContent=`✓ Загружено ${sr.length} из таблицы`;showToast(`✅ Загружено ${sr.length} рецептов`,'green');
     }
   }catch(e){st.textContent='⚠️ Ошибка';showToast('Ошибка загрузки');}
   finally{btn.disabled=false;btn.textContent='🔄 Обновить';}
@@ -775,7 +811,9 @@ function addRecipe(){
     source:document.getElementById('nSource').value.trim(),
     favorite:false,createdAt:Date.now()
   };
-  userRef.child('recipes').push(recipe)
+  // Save to shared recipes — visible to all users
+  const newRecipe = {...recipe, addedBy: currentUser.email, addedAt: Date.now()};
+  db.ref('recipes').push(newRecipe)
     .then(()=>{
       showToast('✅ Рецепт добавлен!','green');
       ['nTitle','nDesc','nCookTime','nTotalTime','nServings','nNotes','nSource','nIngredients','nInstructions'].forEach(id=>document.getElementById(id).value='');
