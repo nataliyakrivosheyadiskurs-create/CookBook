@@ -468,7 +468,7 @@ firebase.initializeApp(FIREBASE_CONFIG);
 const auth = firebase.auth();
 const db   = firebase.database();
 
-const SHEETS_URL = 'https://docs.google.com/spreadsheets/d/1_nZ5HVppORdwNk4LlT8_gIlra58-0zKZiUUePdf2C3U/gviz/tq?tqx=out:json&tq=SELECT+*';
+const SHEETS_URL = 'https://docs.google.com/spreadsheets/d/1_nZ5HVppORdwNk4LlT8_gIlra58-0zKZiUUePdf2C3U/gviz/tq?tqx=out:json';
 const WORKER_URL = 'https://cookbook-proxy.nataliya-krivosheya-diskurs.workers.dev';
 
 const FALLBACK = [
@@ -574,15 +574,24 @@ async function loadFromSheets(){
   return rows.map((row,i)=>{
     const r={};
     cols.forEach((col,j)=>{const cell=row.c?.[j];r[col.toLowerCase().replace(/\s+/g,'_')]=cell?.v??'';});
+    // Also store by index for fallback (H=7=ingredients, I=8=instructions)
+    r['__col7'] = row.c?.[7]?.v ?? '';
+    r['__col8'] = row.c?.[8]?.v ?? '';
     // Support both Russian and English column names + actual spreadsheet columns
     const title = r['заголовок']||r['название']||r['name']||r['title']||Object.values(r)[0]||'';
-    // Try to find ingredients by key name (handles encoding differences)
-    const allKeys = Object.keys(r);
+    // Try to find ingredients by key name, fallback to column index
+    const allKeys = Object.keys(r).filter(k => !k.startsWith('__'));
     const ingKey = allKeys.find(k => k.includes('нгредиент') || k === 'ingredients' || k === 'ingredient');
     const recipeKey = allKeys.find(k => k.includes('рецепт') || k === 'instructions' || k === 'recipe');
     const catKey = allKeys.find(k => k.includes('атегори') || k === 'categories' || k === 'category');
-    const ingredients = (ingKey ? r[ingKey] : '') || '';
-    const instructionsRaw = (recipeKey ? r[recipeKey] : '') || '';
+    const ingredients = (ingKey ? r[ingKey] : '') || r['__col7'] || '';
+    const instructionsRaw = (recipeKey ? r[recipeKey] : '') || r['__col8'] || '';
+    if(i===0) {
+      console.log('ALL COLUMNS:', JSON.stringify(cols));
+      console.log('ALL KEYS+VALS:', JSON.stringify(Object.fromEntries(Object.entries(r).filter(([k,v])=>v&&!k.startsWith('__')))));
+      console.log('ingKey found:', ingKey, '| ingredients:', ingredients.substring(0,100));
+      console.log('col7 direct:', r['__col7'].substring(0,100));
+    }
     const instructions = instructionsRaw;
     const categories = (catKey ? r[catKey] : '') || r['категория'] || r['категории'] || '';
     const totalTime = r['итого_время']||r['общее_время']||r['время']||'';
